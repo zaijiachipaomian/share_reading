@@ -1,10 +1,10 @@
 package v1
 
-type UserLogonController struct {
+type UserLoginController struct {
 	Base
 }
 
 // 用户登录
-func (this *UserLogonController) Post(){
+func (this *UserLoginController) Post(){
 
 }

@@ -17,7 +17,7 @@ func init() {
 	ver1 := beego.NewNamespace("/v1",
 		beego.NSNamespace("/user",
 			// 用户登录的路径
-			beego.NSRouter("/logon", &v1.UserLoginController{},"post:Post"),
+			beego.NSRouter("/login", &v1.UserLoginController{},"post:Post"),
 		),
 	)
 

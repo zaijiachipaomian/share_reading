@@ -9,6 +9,7 @@ package routers
 
 import (
 	"github.com/astaxie/beego"
+	"reading/controllers"
 	"reading/controllers/v1"
 )
 
@@ -22,4 +23,7 @@ func init() {
 
 	// 添加路由
 	beego.AddNamespace(ver1)
+
+	// 处理出错的路由
+	beego.ErrorController(&controllers.ErrorController{})
 }

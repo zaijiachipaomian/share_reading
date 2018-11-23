@@ -20,38 +20,82 @@ type UserLoginController struct {
 
 const (
 	Abort400 = "400"
+	Abort403 = "403"
+	Abort404 = "404"
 	Abort500 = "500"
-
 )
 
-var(
+var (
 	jwtSigningKey = []byte("bla bla bla")
 )
 
-
+func init() {
+	var i models.UserInfo
+	i.Phone ="13123456789"
+	i.PassWord = "12345678"
+	utils.GetClient().Set(i.Phone,&i , -1).Result()
+}
 // 用户登录
 func (this *UserLoginController) Post() {
-	var info models.UserInfo
+	// 用来装 上传的手机号码和密码
+	pd := struct {
+		Phone    string `json:"phone"`
+		PassWord string `json:"pass_word"`
+	}{}
+	//var info models.UserInfo
 	// 反序列化提交的数据
-	err := deserializeJSON2Obj(&this.Controller, &info)
+	err := deserializeJSON2Obj(&this.Controller, &pd)
 	if err != nil {
-		info_(this.Ctx.Request.RemoteAddr,err )
+		info_(this.Ctx.Request.RemoteAddr, err)
 		this.Abort(Abort400)
 	}
 
 	// 正则表达式验证手机号码
 	// @ pattern 正则表达式的类型
 	// @ phone   待验证的字符串
-	ok, err := utils.RegexpValidPhone(info.Phone, utils.PhonePattern)
+	ok, err := utils.RegexpValidPhone(pd.Phone, utils.PhonePattern)
 	// 如果手机号码不正确, 或者手机号码的长度小于8
 	// 返回提交的数据不正确
-	if !ok || len(info.PassWord) < 8 {
-		info_(this.Ctx.Request.RemoteAddr,err,)
+	if !ok || len(pd.PassWord) < 8 {
+		info_(this.Ctx.Request.RemoteAddr, err, )
 		this.Abort(Abort400)
 	}
 
 	// 匹配用户名和密码
+	val := utils.GetClient().Get(pd.Phone).Val()
 
+	// val == "" 表示用户获取的缓存中没有这个数据
+	// 表示用户没有注册这个手机号码没有被注册
+	if val == "" {
+		this.Abort(Abort404)
+		return
+	}
+	// 反序列化 用户的数据
+	var info models.UserInfo
+	err = json.Unmarshal([]byte(val), &info)
+
+	// 反序列化数据失败
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr, err)
+		this.Abort(Abort500)
+		return
+	}
+
+	fmt.Printf("info = %+v \n" , info )
+	// 用户的密码不正确
+	if pd.PassWord != info.PassWord {
+		this.Abort(Abort404)
+		return
+	}
+
+	// 该用户已经被冻结了
+	if info.Freeze == true {
+		this.Abort(Abort403)
+		return
+	}
+
+	fmt.Println("info ", info)
+	fmt.Println("val = " + val)
 	// 确定用户是否已经被冻结
 
 	// 查找用户是否已经登录
@@ -65,24 +109,21 @@ func (this *UserLoginController) Post() {
 
 	jswt := generateJWT(uuids)
 
-
 	t, err := jwt.Parse(jswt, func(*jwt.Token) (interface{}, error) {
 		return jwtSigningKey, nil
 	})
 
-
 	if err != nil {
-		fmt.Printf("jwt.Parse error %+v \n", err )
+		fmt.Printf("jwt.Parse error %+v \n", err)
 		this.Abort(Abort500)
 	}
 
-	iss,ok  := t.Claims.(jwt.MapClaims)
+	iss, ok := t.Claims.(jwt.MapClaims)
 	if ok {
-		fmt.Printf("s = %+v \n",iss["sub"] )
+		fmt.Printf("s = %+v \n", iss["sub"])
 	} else {
 		fmt.Printf("error t.cliams = %#v \n", t.Claims)
 	}
-
 
 	// 生成 jwt
 	// 返回 Auth
@@ -103,7 +144,7 @@ func generateJWT(uuids uuid.UUID) (jswt string) {
 	claims := jwt.StandardClaims{
 		NotBefore: int64(time.Now().Unix() - 1000),
 		// 过期时间设置为一年
-		ExpiresAt: int64(time.Now().Unix() +int64( time.Hour) * 24 * 30 * 12 ),
+		ExpiresAt: int64(time.Now().Unix() + int64(time.Hour)*24*30*12),
 		Issuer:    "reading",
 		Subject:   uuids.String(),
 	}
@@ -117,7 +158,8 @@ func generateJWT(uuids uuid.UUID) (jswt string) {
 
 	return jswt
 }
+
 // info 打印日志消息
-func info_(f interface{} , v ... interface{}){
+func info_(f interface{}, v ... interface{}) {
 	logs.Info(f, v...)
 }

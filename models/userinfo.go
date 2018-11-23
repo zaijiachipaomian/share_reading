@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // 用户的基本信息
 // ID
@@ -21,4 +24,11 @@ type UserInfo struct {
 	Freeze    bool      `json:"-"`
 	Reward    int       `json:"reward"`
 	preMd5    bool
+}
+
+
+// 实现接口 encoding.BinaryMarshaler
+func (s *UserInfo) MarshalBinary() (data []byte, err error) {
+
+	return json.Marshal(s)
 }

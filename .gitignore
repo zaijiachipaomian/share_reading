@@ -1,0 +1,12 @@
+.idea/
+conf/
+*.exe
+*.tmp
+swagger/
+tests/
+*.zip
+*.memprof
+*.pprof
+
+*.exe~
+/static

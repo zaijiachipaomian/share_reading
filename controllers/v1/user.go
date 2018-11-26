@@ -31,10 +31,11 @@ var (
 
 func init() {
 	var i models.UserInfo
-	i.Phone ="13123456789"
+	i.Phone = "13123456789"
 	i.PassWord = "12345678"
-	utils.GetClient().Set(i.Phone,&i , -1).Result()
+	utils.GetClient().Set(i.Phone, &i, -1).Result()
 }
+
 // 用户登录
 func (this *UserLoginController) Post() {
 	// 用来装 上传的手机号码和密码
@@ -81,7 +82,7 @@ func (this *UserLoginController) Post() {
 		return
 	}
 
-	fmt.Printf("info = %+v \n" , info )
+	fmt.Printf("info = %+v \n", info)
 	// 用户的密码不正确
 	if pd.PassWord != info.PassWord {
 		this.Abort(Abort404)
@@ -105,6 +106,17 @@ func (this *UserLoginController) Post() {
 	uuids, err := uuid.NewV4()
 	// 生成 uuid失败
 	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr, " uuid.NewV4 ", " err ", err)
+		this.Abort(Abort500)
+		return
+	}
+
+	// 设置过期时间
+	// 使用 指针的形式
+	_, err = utils.GetClient().Set(uuids.String(), &info, (time.Hour)*24*30*12).Result()
+
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr, "set user info redis err", err)
 		this.Abort(Abort500)
 		return
 	}
@@ -112,30 +124,32 @@ func (this *UserLoginController) Post() {
 	// 生成 jwt
 	jswt := generateJWT(uuids)
 	// 设置 auth  响应头消息
-	this.Ctx.ResponseWriter.Header().Set("Authorization",jswt)
+	this.Ctx.ResponseWriter.Header().Set("Authorization", jswt)
 
+	// 查找相关的数据
+	// todo
 	this.Data["json"] = models.ResponseMessage{
-		Detail:"pass",
-		Code:200,
+		Detail: "pass",
+		Code:   200,
 	}
 	this.ServeJSON(true)
 
-	t, err := jwt.Parse(jswt, func(*jwt.Token) (interface{}, error) {
-		return jwtSigningKey, nil
-	})
-
-	if err != nil {
-		fmt.Printf("jwt.Parse error %+v \n", err)
-		this.Abort(Abort500)
-		return
-	}
-
-	iss, ok := t.Claims.(jwt.MapClaims)
-	if ok {
-		fmt.Printf("s = %+v \n", iss["sub"])
-	} else {
-		fmt.Printf("error t.cliams = %#v \n", t.Claims)
-	}
+	//t, err := jwt.Parse(jswt, func(*jwt.Token) (interface{}, error) {
+	//	return jwtSigningKey, nil
+	//})
+	//
+	//if err != nil {
+	//	fmt.Printf("jwt.Parse error %+v \n", err)
+	//	this.Abort(Abort500)
+	//	return
+	//}
+	//
+	//iss, ok := t.Claims.(jwt.MapClaims)
+	//if ok {
+	//	fmt.Printf("s = %+v \n", iss["sub"])
+	//} else {
+	//	fmt.Printf("error t.cliams = %#v \n", t.Claims)
+	//}
 
 	// 生成 jwt
 	// 返回 Auth

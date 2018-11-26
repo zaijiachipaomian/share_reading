@@ -418,7 +418,21 @@ func (this *UserUploadController)Post(){
 	err = this.SaveToFile("uploadname", "static/upload/" +book.SaveName) // 保存位置在 static/upload, 没有文件夹要先创建
 
 
+		// 返回处理
+	if err != nil {
+		this.Data[controllers.DataJson]  = models.ResponseMessage{
+			Detail:"上传错误",
+			Code:422,
+		}
+		this.ServeJSON(true)
+		return
+	}
 
+	this.Data[controllers.DataJson] = models.ResponseMessage{
+		Detail:"上传书籍成功",
+		Code:200,
+	}
+	this.ServeJSON(true)
 
 }
 

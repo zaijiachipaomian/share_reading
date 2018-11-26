@@ -113,13 +113,23 @@ func (this *UserLoginController) Post() {
 
 	// 设置过期时间
 	// 使用 指针的形式
-	_, err = utils.GetClient().Set(uuids.String(), &info, (time.Hour)*24*30*12).Result()
+	//_, err = utils.GetClient().Set(uuids.String(), &info, (time.Hour)*24*30*12).Result()
+	//
+	//if err != nil {
+	//	info_(this.Ctx.Request.RemoteAddr, "set user info redis err", err)
+	//	this.Abort(Abort500)
+	//	return
+	//}
+	var infos models.UserInfo
 
+	da, err  := utils.GetClient().Get(uuids.String()).Bytes()
 	if err != nil {
-		info_(this.Ctx.Request.RemoteAddr, "set user info redis err", err)
-		this.Abort(Abort500)
-		return
+		fmt.Println("get da err ",err )
 	}
+	err  = json.Unmarshal(da, &infos)
+	fmt.Println("err un err ",err , " da = ", string(da))
+
+	fmt.Printf("infos = %+v\n", infos)
 
 	// 生成 jwt
 	jswt := generateJWT(uuids)

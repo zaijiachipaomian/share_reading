@@ -21,7 +21,11 @@ func init() {
 
 			// 请求注册验证码
 			beego.NSRouter("/register/pull_valid", &v1.UserRegisterController{},"post:PullValidCode"),
+
+			// 用户注册
+			beego.NSRouter("/register", &v1.UserRegisterController{},"post:Register"),
 		),
+
 	)
 
 	// 添加路由

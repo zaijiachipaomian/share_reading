@@ -22,11 +22,11 @@ type UserLoginController struct {
 }
 
 const (
-	Abort400 = "400"
-	Abort403 = "403"
-	Abort404 = "404"
-	Abort500 = "500"
-	ContentType = "Content-Type"
+	Abort400       = "400"
+	Abort403       = "403"
+	Abort404       = "404"
+	Abort500       = "500"
+	ContentType    = "Content-Type"
 	ApplicatonJson = "application/json"
 )
 
@@ -116,23 +116,23 @@ func (this *UserLoginController) Post() {
 		return
 	}
 
-	// 设置过期时间
-	// 使用 指针的形式
-	//_, err = utils.GetClient().Set(uuids.String(), &info, (time.Hour)*24*30*12).Result()
-	//
-	//if err != nil {
-	//	info_(this.Ctx.Request.RemoteAddr, "set user info redis err", err)
-	//	this.Abort(Abort500)
-	//	return
-	//}
+	//设置过期时间
+	//使用 指针的形式
+	_, err = utils.GetClient().Set(uuids.String(), &info, (time.Hour)*24*30*12).Result()
+
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr, "set user info redis err", err)
+		this.Abort(Abort500)
+		return
+	}
 	var infos models.UserInfo
 
-	da, err  := utils.GetClient().Get(uuids.String()).Bytes()
+	da, err := utils.GetClient().Get(uuids.String()).Bytes()
 	if err != nil {
-		fmt.Println("get da err ",err )
+		fmt.Println("get da err ", err)
 	}
-	err  = json.Unmarshal(da, &infos)
-	fmt.Println("err un err ",err , " da = ", string(da))
+	err = json.Unmarshal(da, &infos)
+	fmt.Println("err un err ", err, " da = ", string(da))
 
 	fmt.Printf("infos = %+v\n", infos)
 
@@ -179,22 +179,20 @@ type UserRegisterController struct {
 // 预处理
 // 过滤不是 不是JSON 方式提交的数据
 
-func (this *UserRegisterController)Prepare(){
+func (this *UserRegisterController) Prepare() {
 	contentType := this.Ctx.Request.Header.Get(ContentType)
 	//过滤Content-Type 不是application/json方式的请求
-	if !strings.HasPrefix(contentType,ApplicatonJson) {
+	if !strings.HasPrefix(contentType, ApplicatonJson) {
 		//
-		info_(this.Ctx.Request.RemoteAddr," content -type 不是符合的方式 ", contentType)
+		info_(this.Ctx.Request.RemoteAddr, " content -type 不是符合的方式 ", contentType)
 		this.Abort(Abort400)
 		return
 	}
 
-
-
 }
 
 // 用户获取注册验证
-func (this * UserRegisterController)PullValidCode(){
+func (this *UserRegisterController) PullValidCode() {
 	phone := struct {
 		Phone string `json:"phone"`
 	}{}
@@ -202,7 +200,7 @@ func (this * UserRegisterController)PullValidCode(){
 	err := deserializeJSON2Obj(&this.Controller, &phone)
 
 	if err != nil {
-		info_(this.Ctx.Request.RemoteAddr," 反序列化获取手机号码失败 " , err )
+		info_(this.Ctx.Request.RemoteAddr, " 反序列化获取手机号码失败 ", err)
 		this.Abort(Abort400)
 		return
 	}
@@ -218,11 +216,11 @@ func (this * UserRegisterController)PullValidCode(){
 	data, err := utils.GetClient().Get(phone.Phone).Bytes()
 
 	// 该用户的手机号码已经被使用
-	if len(data ) != 0 {
+	if len(data) != 0 {
 		this.Data[controllers.DataJson] = models.ResponseMessage{
-			Detail:"对不起, 该手机号码无法使用",
+			Detail: "对不起, 该手机号码无法使用",
 
-			Code:422,
+			Code: 422,
 		}
 		// this.Ctx.ResponseWriter.WriteHeader(422)
 
@@ -230,17 +228,18 @@ func (this * UserRegisterController)PullValidCode(){
 		this.StopRun()
 	}
 
-	fmt.Println("s = ", string(data ) , " err ",err )
+	fmt.Println("s = ", string(data), " err ", err)
 
 	// 生成验证码
 	validCode := fmt.Sprintf("%6d", rand.Int31n(999999))
 
-	fmt.Println("验证码 " ,validCode)
+	fmt.Println("验证码 ", validCode)
 
-	_, err = utils.GetClient().Set(fmt.Sprintf("%s:%s", &phone, validCode), validCode, time.Minute*5).Result()
+	// 修正保存的是手机号码
+	_, err = utils.GetClient().Set(fmt.Sprintf("%s:%s", phone.Phone,validCode), validCode, time.Minute*5).Result()
 
 	if err != nil {
-		info_(this.Ctx.Request.RemoteAddr ,"  保存手机的验证码失败 ", err)
+		info_(this.Ctx.Request.RemoteAddr, "  保存手机的验证码失败 ", err)
 		this.Abort(Abort500)
 		return
 	}
@@ -248,13 +247,103 @@ func (this * UserRegisterController)PullValidCode(){
 	// 发送验证码
 
 	this.Data[controllers.DataJson] = models.ResponseMessage{
-		Detail:"验证码已经发送,请注意查看短信,",
-		Code:200,
+		Detail: "验证码已经发送,请注意查看短信,",
+		Code:   200,
 	}
 	this.ServeJSON(true)
 }
 
+// 用户注册
+// 验证用户提交的验证码
+// 验证 手机号码
+func (this *UserRegisterController) Register() {
+	dp := struct {
+		Phone     string `json:"phone"`
+		PassWord  string `json:"pass_word"`
+		ValidCode string `json:"valid_code"`
+	}{}
 
+	err := deserializeJSON2Obj( & this.Controller, &dp)
+
+	// 提交数据的格式有错
+	// JSON 格式发序列化失败
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr , " deserializeJson2Obj err ",err )
+		this.Abort(Abort400)
+		return
+	}
+
+	// 正则表达式验证手机号码
+	ok, err := utils.RegexpValidPhone(dp.Phone, utils.PhonePattern)
+	// 手机号码不正确
+	if !ok {
+		info_(this.Ctx.Request.RemoteAddr , "手机号码不符合 " , err)
+		this.Abort(Abort403)
+		return
+	}
+	// 密码 或者 验证码不正确
+	if len(dp.PassWord) < 8 || len(dp.ValidCode) != 6 {
+		info_(this.Ctx.Request.RemoteAddr," 密码长度获取 验证码长度不正确"  , dp.PassWord , "   " , dp.ValidCode)
+		this.Abort(Abort400)
+		return
+	}
+
+	val := utils.GetClient().Get(fmt.Sprintf("%s:%s", dp.Phone,dp.ValidCode)).Val()
+
+	if val != dp.ValidCode {
+		info_(this.Ctx.Request.RemoteAddr, " 验证码不正确或者已经过期" , val , "  ", dp.ValidCode )
+		this.Abort(Abort403)
+		return
+	}
+
+	var info  models.UserInfo
+
+	info.Phone = dp.Phone
+	info.PassWord = dp.PassWord
+	info.LogonTime = time.Now()
+
+	// 持久化到数据库
+	_, err = info.Insert()
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr," 持久化数据库失败 " ,err)
+		this.Abort(Abort500)
+		return
+
+	}
+
+
+	// 生成uuid
+	uuids, err := uuid.NewV4()
+	// 生成 uuid失败
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr, " uuid.NewV4 ", " err ", err)
+		this.Abort(Abort500)
+		return
+	}
+
+	jswt := generateJWT(uuids)
+	// 设置 auth  响应头消息
+	this.Ctx.ResponseWriter.Header().Set("Authorization", jswt)
+
+	_, err = utils.GetClient().Set(uuids.String(), &info, (time.Hour)*24*30*12).Result()
+
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr, "set user info redis err", err)
+		this.Abort(Abort500)
+		return
+	}
+
+	// 查找相关的数据
+	// todo
+	this.Data["json"] = models.ResponseMessage{
+		Detail: "pass",
+		Code:   200,
+	}
+	this.ServeJSON(true)
+
+	fmt.Println(" val  " , val )
+
+}
 
 // 从提交的数据中使用json反序列化到v
 func deserializeJSON2Obj(ctr *beego.Controller, v interface{}) (err error) {

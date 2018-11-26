@@ -7,8 +7,11 @@ import (
 	"github.com/astaxie/beego/logs"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/satori/go.uuid"
+	"math/rand"
+	"neecola.com/eula/controllers"
 	"reading/models"
 	"reading/utils"
+	"strings"
 	"time"
 )
 
@@ -23,6 +26,8 @@ const (
 	Abort403 = "403"
 	Abort404 = "404"
 	Abort500 = "500"
+	ContentType = "Content-Type"
+	ApplicatonJson = "application/json"
 )
 
 var (
@@ -166,6 +171,90 @@ func (this *UserLoginController) Post() {
 	// 返回用户的相关数据
 
 }
+
+type UserRegisterController struct {
+	Base
+}
+
+// 预处理
+// 过滤不是 不是JSON 方式提交的数据
+
+func (this *UserRegisterController)Prepare(){
+	contentType := this.Ctx.Request.Header.Get(ContentType)
+	//过滤Content-Type 不是application/json方式的请求
+	if !strings.HasPrefix(contentType,ApplicatonJson) {
+		//
+		info_(this.Ctx.Request.RemoteAddr," content -type 不是符合的方式 ", contentType)
+		this.Abort(Abort400)
+		return
+	}
+
+
+
+}
+
+// 用户获取注册验证
+func (this * UserRegisterController)PullValidCode(){
+	phone := struct {
+		Phone string `json:"phone"`
+	}{}
+
+	err := deserializeJSON2Obj(&this.Controller, &phone)
+
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr," 反序列化获取手机号码失败 " , err )
+		this.Abort(Abort400)
+		return
+	}
+
+	ok, err := utils.RegexpValidPhone(phone.Phone, utils.PhonePattern)
+
+	if !ok {
+		info_(this.Ctx.Request.RemoteAddr, " 提交手机号码有误 ", err)
+		this.Abort(Abort403)
+		return
+	}
+
+	data, err := utils.GetClient().Get(phone.Phone).Bytes()
+
+	// 该用户的手机号码已经被使用
+	if len(data ) != 0 {
+		this.Data[controllers.DataJson] = models.ResponseMessage{
+			Detail:"对不起, 该手机号码无法使用",
+
+			Code:422,
+		}
+		// this.Ctx.ResponseWriter.WriteHeader(422)
+
+		this.ServeJSON(true)
+		this.StopRun()
+	}
+
+	fmt.Println("s = ", string(data ) , " err ",err )
+
+	// 生成验证码
+	validCode := fmt.Sprintf("%6d", rand.Int31n(999999))
+
+	fmt.Println("验证码 " ,validCode)
+
+	_, err = utils.GetClient().Set(fmt.Sprintf("%s:%s", &phone, validCode), validCode, time.Minute*5).Result()
+
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr ,"  保存手机的验证码失败 ", err)
+		this.Abort(Abort500)
+		return
+	}
+	// todo
+	// 发送验证码
+
+	this.Data[controllers.DataJson] = models.ResponseMessage{
+		Detail:"验证码已经发送,请注意查看短信,",
+		Code:200,
+	}
+	this.ServeJSON(true)
+}
+
+
 
 // 从提交的数据中使用json反序列化到v
 func deserializeJSON2Obj(ctr *beego.Controller, v interface{}) (err error) {

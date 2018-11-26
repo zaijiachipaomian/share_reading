@@ -18,6 +18,9 @@ func init() {
 		beego.NSNamespace("/user",
 			// 用户登录的路径
 			beego.NSRouter("/login", &v1.UserLoginController{},"post:Post"),
+
+			// 请求注册验证码
+			beego.NSRouter("/register/pull_valid", &v1.UserRegisterController{},"post:PullValidCode"),
 		),
 	)
 

@@ -24,6 +24,9 @@ func init() {
 
 			// 用户注册
 			beego.NSRouter("/register", &v1.UserRegisterController{},"post:Register"),
+
+			// 用户上传自己的文件
+			beego.NSRouter("/upload/self", &v1.UserUploadController{},),
 		),
 
 	)

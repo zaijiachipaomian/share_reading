@@ -11,6 +11,7 @@ import (
 	"neecola.com/eula/controllers"
 	"reading/models"
 	"reading/utils"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -73,6 +74,7 @@ func (this *UserLoginController) Post() {
 	// val == "" 表示用户获取的缓存中没有这个数据
 	// 表示用户没有注册这个手机号码没有被注册
 	if val == "" {
+		info_(this.Ctx.Request.RemoteAddr," 用户登录 " , pd.Phone , " 用户密码 ", pd.PassWord)
 		this.Abort(Abort404)
 		return
 	}
@@ -326,6 +328,7 @@ func (this *UserRegisterController) Register() {
 	this.Ctx.ResponseWriter.Header().Set("Authorization", jswt)
 
 	_, err = utils.GetClient().Set(uuids.String(), &info, (time.Hour)*24*30*12).Result()
+	utils.GetClient().Set(info.Phone, &info,(time.Hour)*24*30*12).Result()
 
 	if err != nil {
 		info_(this.Ctx.Request.RemoteAddr, "set user info redis err", err)
@@ -344,6 +347,81 @@ func (this *UserRegisterController) Register() {
 	fmt.Println(" val  " , val )
 
 }
+
+//------------------------------------ 用户上传书籍
+type UserUploadController struct {
+	Base
+}
+
+func (this *UserUploadController) Prepare(){
+
+
+}
+
+func (this *UserUploadController)Post(){
+	ok, sub := validJWT(&this.Controller)
+	if !ok || sub == "" {
+		this.Data[controllers.DataJson] = models.ResponseMessage{
+			Detail:"登录过期,请重新登录",
+			Code:403,
+		}
+		this.ServeJSON(true)
+		this.StopRun()
+	}
+	var info models.UserInfo
+	data , err := utils.GetClient().Get(sub).Bytes()
+
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr,"  upload file " , err )
+		this.Abort(Abort403)
+		return
+	}
+	err = json.Unmarshal(data, &info )
+
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr,"  upload file " , err )
+		this.Abort(Abort403)
+		return
+		this.Abort(Abort403)
+
+	}
+	f, h, err := this.GetFile("uploadname")
+	if err != nil {
+		info_("getfile err ", err)
+		this.Abort(Abort403)
+		return
+	}
+	defer f.Close()
+
+
+	if !strings.HasSuffix(h.Filename,"pdf") {
+		info_(this.Ctx.Request.RemoteAddr, "不允许上传非 pdf 文件 ", )
+		this.Data[controllers.DataJson] = models.ResponseMessage{
+			Detail:"不允许上传非pdf文件",
+			Code:422,
+		}
+		this.ServeJSON(true)
+		return
+	}
+
+	book := models.UploadBook{}
+	book.UserInfo = &info
+	book.BookName = h.Filename
+	book.UploadTime = time.Now()
+	book.SaveName = fmt.Sprintf("%s%d.pdf",strconv.FormatInt(time.Now().Unix(),10),info.ID)
+	_, err = book.Insert()
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr, " 保存信息失败", err)
+		this.Abort(Abort500)
+		return
+	}
+	err = this.SaveToFile("uploadname", "static/upload/" +book.SaveName) // 保存位置在 static/upload, 没有文件夹要先创建
+
+
+
+
+}
+
 
 // 从提交的数据中使用json反序列化到v
 func deserializeJSON2Obj(ctr *beego.Controller, v interface{}) (err error) {
@@ -376,4 +454,33 @@ func generateJWT(uuids uuid.UUID) (jswt string) {
 // info 打印日志消息
 func info_(f interface{}, v ... interface{}) {
 	logs.Info(f, v...)
+}
+
+
+func validJWT( ctr *beego.Controller) ( ok bool, sub string ){
+
+	authorization := ctr.Ctx.Request.Header.Get("Authorization")
+
+	if authorization == ""{
+		return ok ,""
+	}
+
+	t, err := jwt.Parse(authorization, func(*jwt.Token) (interface{}, error) {
+		return jwtSigningKey, nil
+	})
+
+	if err != nil {
+		return ok ,""
+	}
+
+	iss, ok := t.Claims.(jwt.MapClaims)
+	if ok {
+		fmt.Printf("s = %+v \n", iss["sub"])
+		sub = iss["sub"].(string  )
+	} else {
+		fmt.Printf("error t.cliams = %#v \n", t.Claims)
+	}
+
+	ok = t.Valid
+	return ok ,sub
 }

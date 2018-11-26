@@ -103,11 +103,22 @@ func (this *UserLoginController) Post() {
 	// 生成 uuid
 	// 生成uuid
 	uuids, err := uuid.NewV4()
+	// 生成 uuid失败
 	if err != nil {
 		this.Abort(Abort500)
+		return
 	}
 
+	// 生成 jwt
 	jswt := generateJWT(uuids)
+	// 设置 auth  响应头消息
+	this.Ctx.ResponseWriter.Header().Set("Authorization",jswt)
+
+	this.Data["json"] = models.ResponseMessage{
+		Detail:"pass",
+		Code:200,
+	}
+	this.ServeJSON(true)
 
 	t, err := jwt.Parse(jswt, func(*jwt.Token) (interface{}, error) {
 		return jwtSigningKey, nil
@@ -116,6 +127,7 @@ func (this *UserLoginController) Post() {
 	if err != nil {
 		fmt.Printf("jwt.Parse error %+v \n", err)
 		this.Abort(Abort500)
+		return
 	}
 
 	iss, ok := t.Claims.(jwt.MapClaims)

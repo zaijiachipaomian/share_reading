@@ -49,6 +49,6 @@ func main() {
 	// 增加静态资源文件
 	// url 外部访问路径
 	// path 本地资源文件
-	beego.SetStaticPath("/static","static")
+	beego.SetStaticPath("/static/*","static")
 	beego.Run()
 }

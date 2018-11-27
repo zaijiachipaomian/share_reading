@@ -74,7 +74,7 @@ func (this *UserLoginController) Post() {
 	// val == "" 表示用户获取的缓存中没有这个数据
 	// 表示用户没有注册这个手机号码没有被注册
 	if val == "" {
-		info_(this.Ctx.Request.RemoteAddr," 用户登录 " , pd.Phone , " 用户密码 ", pd.PassWord)
+		info_(this.Ctx.Request.RemoteAddr, " 用户登录 ", pd.Phone, " 用户密码 ", pd.PassWord)
 		this.Abort(Abort404)
 		return
 	}
@@ -238,7 +238,7 @@ func (this *UserRegisterController) PullValidCode() {
 	fmt.Println("验证码 ", validCode)
 
 	// 修正保存的是手机号码
-	_, err = utils.GetClient().Set(fmt.Sprintf("%s:%s", phone.Phone,validCode), validCode, time.Minute*5).Result()
+	_, err = utils.GetClient().Set(fmt.Sprintf("%s:%s", phone.Phone, validCode), validCode, time.Minute*5).Result()
 
 	if err != nil {
 		info_(this.Ctx.Request.RemoteAddr, "  保存手机的验证码失败 ", err)
@@ -265,12 +265,12 @@ func (this *UserRegisterController) Register() {
 		ValidCode string `json:"valid_code"`
 	}{}
 
-	err := deserializeJSON2Obj( & this.Controller, &dp)
+	err := deserializeJSON2Obj(&this.Controller, &dp)
 
 	// 提交数据的格式有错
 	// JSON 格式发序列化失败
 	if err != nil {
-		info_(this.Ctx.Request.RemoteAddr , " deserializeJson2Obj err ",err )
+		info_(this.Ctx.Request.RemoteAddr, " deserializeJson2Obj err ", err)
 		this.Abort(Abort400)
 		return
 	}
@@ -279,26 +279,26 @@ func (this *UserRegisterController) Register() {
 	ok, err := utils.RegexpValidPhone(dp.Phone, utils.PhonePattern)
 	// 手机号码不正确
 	if !ok {
-		info_(this.Ctx.Request.RemoteAddr , "手机号码不符合 " , err)
+		info_(this.Ctx.Request.RemoteAddr, "手机号码不符合 ", err)
 		this.Abort(Abort403)
 		return
 	}
 	// 密码 或者 验证码不正确
 	if len(dp.PassWord) < 8 || len(dp.ValidCode) != 6 {
-		info_(this.Ctx.Request.RemoteAddr," 密码长度获取 验证码长度不正确"  , dp.PassWord , "   " , dp.ValidCode)
+		info_(this.Ctx.Request.RemoteAddr, " 密码长度获取 验证码长度不正确", dp.PassWord, "   ", dp.ValidCode)
 		this.Abort(Abort400)
 		return
 	}
 
-	val := utils.GetClient().Get(fmt.Sprintf("%s:%s", dp.Phone,dp.ValidCode)).Val()
+	val := utils.GetClient().Get(fmt.Sprintf("%s:%s", dp.Phone, dp.ValidCode)).Val()
 
 	if val != dp.ValidCode {
-		info_(this.Ctx.Request.RemoteAddr, " 验证码不正确或者已经过期" , val , "  ", dp.ValidCode )
+		info_(this.Ctx.Request.RemoteAddr, " 验证码不正确或者已经过期", val, "  ", dp.ValidCode)
 		this.Abort(Abort403)
 		return
 	}
 
-	var info  models.UserInfo
+	var info models.UserInfo
 
 	info.Phone = dp.Phone
 	info.PassWord = dp.PassWord
@@ -307,12 +307,11 @@ func (this *UserRegisterController) Register() {
 	// 持久化到数据库
 	_, err = info.Insert()
 	if err != nil {
-		info_(this.Ctx.Request.RemoteAddr," 持久化数据库失败 " ,err)
+		info_(this.Ctx.Request.RemoteAddr, " 持久化数据库失败 ", err)
 		this.Abort(Abort500)
 		return
 
 	}
-
 
 	// 生成uuid
 	uuids, err := uuid.NewV4()
@@ -328,7 +327,7 @@ func (this *UserRegisterController) Register() {
 	this.Ctx.ResponseWriter.Header().Set("Authorization", jswt)
 
 	_, err = utils.GetClient().Set(uuids.String(), &info, (time.Hour)*24*30*12).Result()
-	utils.GetClient().Set(info.Phone, &info,(time.Hour)*24*30*12).Result()
+	utils.GetClient().Set(info.Phone, &info, (time.Hour)*24*30*12).Result()
 
 	if err != nil {
 		info_(this.Ctx.Request.RemoteAddr, "set user info redis err", err)
@@ -344,7 +343,7 @@ func (this *UserRegisterController) Register() {
 	}
 	this.ServeJSON(true)
 
-	fmt.Println(" val  " , val )
+	fmt.Println(" val  ", val)
 
 }
 
@@ -353,33 +352,32 @@ type UserUploadController struct {
 	Base
 }
 
-func (this *UserUploadController) Prepare(){
-
+func (this *UserUploadController) Prepare() {
 
 }
 
-func (this *UserUploadController)Post(){
+func (this *UserUploadController) Post() {
 	ok, sub := validJWT(&this.Controller)
 	if !ok || sub == "" {
 		this.Data[controllers.DataJson] = models.ResponseMessage{
-			Detail:"登录过期,请重新登录",
-			Code:403,
+			Detail: "登录过期,请重新登录",
+			Code:   403,
 		}
 		this.ServeJSON(true)
 		this.StopRun()
 	}
 	var info models.UserInfo
-	data , err := utils.GetClient().Get(sub).Bytes()
+	data, err := utils.GetClient().Get(sub).Bytes()
 
 	if err != nil {
-		info_(this.Ctx.Request.RemoteAddr,"  upload file " , err )
+		info_(this.Ctx.Request.RemoteAddr, "  upload file ", err)
 		this.Abort(Abort403)
 		return
 	}
-	err = json.Unmarshal(data, &info )
+	err = json.Unmarshal(data, &info)
 
 	if err != nil {
-		info_(this.Ctx.Request.RemoteAddr,"  upload file " , err )
+		info_(this.Ctx.Request.RemoteAddr, "  upload file ", err)
 		this.Abort(Abort403)
 		return
 		this.Abort(Abort403)
@@ -393,12 +391,11 @@ func (this *UserUploadController)Post(){
 	}
 	defer f.Close()
 
-
-	if !strings.HasSuffix(h.Filename,"pdf") {
+	if !strings.HasSuffix(h.Filename, "pdf") {
 		info_(this.Ctx.Request.RemoteAddr, "不允许上传非 pdf 文件 ", )
 		this.Data[controllers.DataJson] = models.ResponseMessage{
-			Detail:"不允许上传非pdf文件",
-			Code:422,
+			Detail: "不允许上传非pdf文件",
+			Code:   422,
 		}
 		this.ServeJSON(true)
 		return
@@ -408,34 +405,31 @@ func (this *UserUploadController)Post(){
 	book.UserInfo = &info
 	book.BookName = h.Filename
 	book.UploadTime = time.Now()
-	book.SaveName = fmt.Sprintf("%s%d.pdf",strconv.FormatInt(time.Now().Unix(),10),info.ID)
+	book.SaveName = fmt.Sprintf("%s%d.pdf", strconv.FormatInt(time.Now().Unix(), 10), info.ID)
 	_, err = book.Insert()
 	if err != nil {
 		info_(this.Ctx.Request.RemoteAddr, " 保存信息失败", err)
 		this.Abort(Abort500)
 		return
 	}
-	err = this.SaveToFile("uploadname", "static/upload/" +book.SaveName) // 保存位置在 static/upload, 没有文件夹要先创建
-
-
-		// 返回处理
+	err = this.SaveToFile("uploadname", "static/upload/"+book.SaveName) // 保存位置在 static/upload, 没有文件夹要先创建
+	// 返回处理
 	if err != nil {
-		this.Data[controllers.DataJson]  = models.ResponseMessage{
-			Detail:"上传错误",
-			Code:422,
+		this.Data[controllers.DataJson] = models.ResponseMessage{
+			Detail: "上传错误",
+			Code:   422,
 		}
 		this.ServeJSON(true)
 		return
 	}
 
 	this.Data[controllers.DataJson] = models.ResponseMessage{
-		Detail:"上传书籍成功",
-		Code:200,
+		Detail: "上传书籍成功",
+		Code:   200,
 	}
 	this.ServeJSON(true)
 
 }
-
 
 // 从提交的数据中使用json反序列化到v
 func deserializeJSON2Obj(ctr *beego.Controller, v interface{}) (err error) {
@@ -470,13 +464,12 @@ func info_(f interface{}, v ... interface{}) {
 	logs.Info(f, v...)
 }
 
-
-func validJWT( ctr *beego.Controller) ( ok bool, sub string ){
+func validJWT(ctr *beego.Controller) (ok bool, sub string) {
 
 	authorization := ctr.Ctx.Request.Header.Get("Authorization")
 
-	if authorization == ""{
-		return ok ,""
+	if authorization == "" {
+		return ok, ""
 	}
 
 	t, err := jwt.Parse(authorization, func(*jwt.Token) (interface{}, error) {
@@ -484,17 +477,17 @@ func validJWT( ctr *beego.Controller) ( ok bool, sub string ){
 	})
 
 	if err != nil {
-		return ok ,""
+		return ok, ""
 	}
 
 	iss, ok := t.Claims.(jwt.MapClaims)
 	if ok {
 		fmt.Printf("s = %+v \n", iss["sub"])
-		sub = iss["sub"].(string  )
+		sub = iss["sub"].(string)
 	} else {
 		fmt.Printf("error t.cliams = %#v \n", t.Claims)
 	}
 
 	ok = t.Valid
-	return ok ,sub
+	return ok, sub
 }

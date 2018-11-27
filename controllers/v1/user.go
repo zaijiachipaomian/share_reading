@@ -695,6 +695,35 @@ func (this *UserATBook2ReadingListController) Post() {
 
 }
 
+// ---------------------------------------------------
+// 用户注销登录
+type UserLogoutController struct {
+	Base
+}
+
+// 用户注销登录, 删除token .uuids 做无效处理
+func (this *UserLogoutController) Get(){
+
+	ok, sub := utils.ValidJWT(this.Ctx)
+
+
+
+	if !ok  {
+		responseJSON(&this.Controller,models.ResponseMessage{Detail:"ok",Code:200})
+		this.StopRun()
+		return
+	}
+
+	utils.GetClient().Del(sub).Result()
+
+	responseJSON(&this.Controller,models.ResponseMessage{Detail:"ok",Code:200})
+	this.StopRun()
+	return
+
+
+
+}
+
 // 从提交的数据中使用json反序列化到v
 func deserializeJSON2Obj(ctr *beego.Controller, v interface{}) (err error) {
 	err = json.Unmarshal(ctr.Ctx.Input.RequestBody, v)

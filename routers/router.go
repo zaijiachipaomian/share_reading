@@ -43,6 +43,9 @@ func init() {
 			// 用户添加书籍到书单
 			// 如果书单的id at = add to
 			beego.NSRouter("/at/reading_list", &v1.UserATBook2ReadingListController{}, "post:Post"),
+
+			// 用户注销的功能
+			beego.NSRouter("/logout",&v1.UserLogoutController{}),
 		),
 
 	)

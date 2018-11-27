@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/logs"
+	"github.com/astaxie/beego/orm"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/satori/go.uuid"
 	"math/rand"
@@ -309,7 +310,8 @@ func (this *UserRegisterController) Register() {
 	info.LogonTime = time.Now()
 
 	// 持久化到数据库
-	_, err = info.Insert()
+	// 修复错误 info.ID = 返回值
+	info.ID, err = info.Insert()
 	if err != nil {
 		info_(this.Ctx.Request.RemoteAddr, " 持久化数据库失败 ", err)
 		this.Abort(Abort500)
@@ -596,7 +598,7 @@ func (this *UserReadingListController) Post() {
 
 	// 持久化书单失败
 	if err != nil {
-		info_(this.Ctx.Request.RemoteAddr, "持久化书单失败 ", err, info )
+		info_(this.Ctx.Request.RemoteAddr, "持久化书单失败 ", err, info)
 		this.Abort(Abort500)
 		return
 	}
@@ -606,6 +608,90 @@ func (this *UserReadingListController) Post() {
 	// 客户端需要拿到这个返回的id
 	responseJSON(&this.Controller, models.ResponseMessage{Detail: readingList, Code: 200})
 	return
+
+}
+
+// ----------------------------------------------
+// 用户增加书籍到书单
+type UserATBook2ReadingListController struct {
+	Base
+}
+
+//
+func (this *UserATBook2ReadingListController) Prepare() {
+
+	ok, sub := utils.ValidJWT(this.Ctx)
+
+	// 用户的 token 已经过期了
+	if !ok {
+
+		responseJSON(&this.Controller, models.ResponseMessage{
+			Detail: "登录过期,请重新登录",
+			Code:   401,
+		})
+		this.StopRun()
+		return
+
+	}
+
+	var info models.UserInfo
+	var err error
+	err = ValidUserInfo(sub, &info)
+	// 从缓存中获取用户的的消息失败
+	if err != nil {
+		responseJSON(&this.Controller, models.ResponseMessage{Detail: "登录信息过期,请重新登录", Code: 401})
+		this.StopRun()
+		return
+	}
+
+	//  获取用户提交的书籍的信息
+	var bookProfile models.BookProfile
+	// 反序列化书籍的资料失败
+	err = deserializeJSON2Obj(&this.Controller, &bookProfile)
+	if err != nil {
+		this.Abort(Abort400)
+		this.StopRun()
+		return
+	}
+
+	// 排除没有上传书单id 的数据
+	if bookProfile.ReadingList == nil {
+		info_(this.Ctx.Request.RemoteAddr, "用户添加书籍到书单   但是没有上传 书单的id")
+		this.Abort(Abort400)
+		this.StopRun()
+		return
+	}
+
+	fmt.Printf(" bookProfile = %#v  bookList = %+v \n ", bookProfile, bookProfile.ReadingList)
+
+	// 设置书单的用户信息
+	bookProfile.ReadingList.UserInfo = & info
+	fmt.Println(info)
+	// 查找书单的信息 , 查看用户该书单是否存在
+	err = orm.NewOrm().Read(bookProfile.ReadingList, "UserInfo", "Id")
+
+	if err !=nil {
+		info_(this.Ctx.Request.RemoteAddr, "用户添加图书到书单,但是找不到该书单的信息", err )
+		this.Abort(Abort404)
+		this.StopRun()
+	}
+
+	bookProfile.Id , err = bookProfile.Insert()
+	if err != nil {
+		this.Abort(Abort500)
+		this.StopRun()
+		return
+	}
+
+	responseJSON(&this.Controller, models.ResponseMessage{Detail:bookProfile,Code:200})
+
+
+
+
+}
+
+// 用户增加书籍到指定的书单
+func (this *UserATBook2ReadingListController) Post() {
 
 }
 

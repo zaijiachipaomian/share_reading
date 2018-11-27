@@ -474,18 +474,18 @@ func (this *UserPublishBookController) Post() {
 	var publishBook models.PublishBook
 	// todo 获取用户的提交的基本数据, Cost  ,Reward ,
 	if err := this.ParseForm(&publishBook); err != nil {
-		info_(this.Ctx.Request.RemoteAddr, "  parseForm ", err )
-		responseJSON(&this.Controller,models.ResponseMessage{Detail:"参数错误",Code:400})
+		info_(this.Ctx.Request.RemoteAddr, "  parseForm ", err)
+		responseJSON(&this.Controller, models.ResponseMessage{Detail: "参数错误", Code: 400})
 		this.StopRun()
 		return
 	}
-	fmt.Printf("publish = %+v \n" , publishBook )
+	fmt.Printf("publish = %+v \n", publishBook)
 	// 用户提交的书籍 消耗的阅读币和 奖励币有误
 	if publishBook.Cost < MinCost || publishBook.Cost > MaxCost ||
-		publishBook.Reward <MinReward || publishBook.Reward>MaxReward {
-			responseJSON(&this.Controller, models.ResponseMessage{Detail:"forbidden ", Code:403})
-			this.StopRun()
-			return
+		publishBook.Reward < MinReward || publishBook.Reward > MaxReward {
+		responseJSON(&this.Controller, models.ResponseMessage{Detail: "forbidden ", Code: 403})
+		this.StopRun()
+		return
 
 	}
 
@@ -507,8 +507,8 @@ func (this *UserPublishBookController) Post() {
 		return
 	}
 
-	publishBook.UserInfo = & info
-	publishBook.SaveName =  fmt.Sprintf("%s%d.pdf", strconv.FormatInt(time.Now().Unix(), 10), info.ID)
+	publishBook.UserInfo = &info
+	publishBook.SaveName = fmt.Sprintf("%s%d.pdf", strconv.FormatInt(time.Now().Unix(), 10), info.ID)
 	publishBook.PublishTime = time.Now()
 	// 保存发布书籍的信息
 	_, err = publishBook.Insert()
@@ -516,7 +516,6 @@ func (this *UserPublishBookController) Post() {
 		this.Abort(Abort500)
 		return
 	}
-
 
 	err = this.SaveToFile("filename", "static/publish/"+publishBook.SaveName) // 保存位置在 static/upload, 没有文件夹要先创建
 	// 返回处理
@@ -534,6 +533,78 @@ func (this *UserPublishBookController) Post() {
 		Code:   200,
 	}
 	this.ServeJSON(true)
+	return
+
+}
+
+// ---------------------------------------------------------------------
+// 用户发布书单
+type UserReadingListController struct {
+	Base
+}
+
+func (this *UserReadingListController) Prepare() {
+
+}
+
+// 用作于用户创建书单
+func (this *UserReadingListController) Post() {
+
+	// 验证 jwt 是否是有效的
+	ok, sub := utils.ValidJWT(this.Ctx)
+	// 验证 token 失败
+	if !ok {
+		responseJSON(&this.Controller, models.ResponseMessage{Detail: "登录过期,请重新登录", Code: 422})
+		this.StopRun()
+		return
+	}
+
+	var info models.UserInfo
+	var err error
+	err = ValidUserInfo(sub, &info)
+	// 从缓存中获取用户的的消息失败
+	if err != nil {
+		responseJSON(&this.Controller, models.ResponseMessage{Detail: "登录信息过期,请重新登录", Code: 401})
+		this.StopRun()
+		return
+	}
+
+	var readingList models.ReadingList
+	// 发序列书单的基本消息
+	err = deserializeJSON2Obj(&this.Controller, &readingList)
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr, "反序列化书单失败 ", string(this.Ctx.Input.RequestBody), err)
+		this.Abort(Abort400)
+		return
+	}
+
+	// 如果书单的名称为空
+	if len(readingList.Name) == 0 || len(readingList.Name) >= 50 ||
+		len(readingList.Types) == 0 || len(readingList.Types) >= 50 ||
+		len(readingList.Instruction) == 0 || len(readingList.Instruction) >= 250 {
+		info_(this.Ctx.Request.RemoteAddr, "书单的信息不正确  ", readingList)
+		this.Abort(Abort403)
+		return
+	}
+
+	// 设置书单的所属用户
+	readingList.UserInfo = &info
+	// 重置用户的ID
+	readingList.Id = 0
+
+	id, err := readingList.Insert()
+
+	// 持久化书单失败
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr, "持久化书单失败 ", err, info )
+		this.Abort(Abort500)
+		return
+	}
+
+	readingList.Id = id
+	// 返回持久化成功的书单的id
+	// 客户端需要拿到这个返回的id
+	responseJSON(&this.Controller, models.ResponseMessage{Detail: readingList, Code: 200})
 	return
 
 }

@@ -36,6 +36,9 @@ func init() {
 
 			// 用户发布书籍
 			beego.NSRouter("/publish", &v1.UserPublishBookController{}, "post:Post"),
+
+			// 用户发布书单
+			beego.NSRouter("/p/reading_list", &v1.UserReadingListController{} , "post:Post"),
 		),
 
 	)

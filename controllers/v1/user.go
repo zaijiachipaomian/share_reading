@@ -432,6 +432,19 @@ func (this *UserUploadController) Post() {
 
 }
 
+// 用户发布新的书籍
+type UserCommitBookController struct {
+	Base
+}
+
+func(this *UserCommitBookController)Prepare(){
+
+}
+
+func (this *UserCommitBookController)Post(){
+
+}
+
 // 从提交的数据中使用json反序列化到v
 func deserializeJSON2Obj(ctr *beego.Controller, v interface{}) (err error) {
 	err = json.Unmarshal(ctr.Ctx.Input.RequestBody, v)

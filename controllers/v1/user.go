@@ -665,28 +665,25 @@ func (this *UserATBook2ReadingListController) Prepare() {
 	fmt.Printf(" bookProfile = %#v  bookList = %+v \n ", bookProfile, bookProfile.ReadingList)
 
 	// 设置书单的用户信息
-	bookProfile.ReadingList.UserInfo = & info
+	bookProfile.ReadingList.UserInfo = &info
 	fmt.Println(info)
 	// 查找书单的信息 , 查看用户该书单是否存在
 	err = orm.NewOrm().Read(bookProfile.ReadingList, "UserInfo", "Id")
 
-	if err !=nil {
-		info_(this.Ctx.Request.RemoteAddr, "用户添加图书到书单,但是找不到该书单的信息", err )
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr, "用户添加图书到书单,但是找不到该书单的信息", err)
 		this.Abort(Abort404)
 		this.StopRun()
 	}
 
-	bookProfile.Id , err = bookProfile.Insert()
+	bookProfile.Id, err = bookProfile.Insert()
 	if err != nil {
 		this.Abort(Abort500)
 		this.StopRun()
 		return
 	}
 
-	responseJSON(&this.Controller, models.ResponseMessage{Detail:bookProfile,Code:200})
-
-
-
+	responseJSON(&this.Controller, models.ResponseMessage{Detail: bookProfile, Code: 200})
 
 }
 
@@ -702,24 +699,102 @@ type UserLogoutController struct {
 }
 
 // 用户注销登录, 删除token .uuids 做无效处理
-func (this *UserLogoutController) Get(){
+func (this *UserLogoutController) Get() {
 
 	ok, sub := utils.ValidJWT(this.Ctx)
 
-
-
-	if !ok  {
-		responseJSON(&this.Controller,models.ResponseMessage{Detail:"ok",Code:200})
+	if !ok {
+		responseJSON(&this.Controller, models.ResponseMessage{Detail: "ok", Code: 200})
 		this.StopRun()
 		return
 	}
 
 	utils.GetClient().Del(sub).Result()
 
-	responseJSON(&this.Controller,models.ResponseMessage{Detail:"ok",Code:200})
+	responseJSON(&this.Controller, models.ResponseMessage{Detail: "ok", Code: 200})
 	this.StopRun()
 	return
 
+}
+
+// --------------------------------------------
+// 用户评价书籍
+type UserCommentBookController struct {
+	Base
+}
+
+func (this *UserCommentBookController) Post() {
+	pd := struct {
+		BookId  int64  `json:"book_id"`
+		Content string `json:"content"`
+	}{}
+
+	ok, sub := utils.ValidJWT(this.Ctx)
+
+	if !ok {
+		responseJSON(&this.Controller, models.ResponseMessage{Detail: "用户登录过期,请重新登录", Code: 200})
+		this.StopRun()
+		return
+	}
+
+	var info models.UserInfo
+	var err error
+	err = ValidUserInfo(sub, &info)
+	if err != nil {
+		responseJSON(&this.Controller, models.ResponseMessage{Detail: "用户登录过期,请重新登录", Code: 200})
+		this.StopRun()
+		return
+	}
+
+	// 反序列化用户提交的数据信息
+	// 带评论书籍的id
+	// 评价的内容
+	err = deserializeJSON2Obj(&this.Controller, &pd)
+	if err != nil  || len(pd.Content) >=250{
+		info_(this.Ctx.Request.RemoteAddr,"反序列反消息失败或者评价的内容过长 ",pd, " err ", err )
+		this.Abort(Abort400)
+		this.StopRun()
+		return
+	}
+
+	// 如果评级的内容为空
+	if len(pd.Content) == 0{
+		info_(this.Ctx.Request.RemoteAddr, "禁止空白的评论")
+		this.Ctx.ResponseWriter.WriteHeader(403)
+		this.Ctx.WriteString(`{"detail":"禁止无效的评论","code":403}`)
+		this.StopRun()
+		return
+	}
+
+	var bookProfile models.BookProfile
+	bookProfile.Id = pd.BookId
+	err = orm.NewOrm().Read(&bookProfile, "id")
+
+	if err != nil {
+		// 该书籍可能不存在
+		info_(this.Ctx.Request.RemoteAddr, " 查找书籍的信息 "  , err)
+		this.Abort(Abort500)
+		return
+	}
+
+	var bookComment models.BookComment
+
+	// 初始化 评论的基本内容
+	bookComment.Content = pd.Content
+	bookComment.UserInfo = &info
+	bookComment.BookProfile  = &  bookProfile
+	bookComment.CommentTime = time.Now()
+
+	bookComment.Id ,err = bookComment.Insert()
+	if err != nil {
+		info_(this.Ctx.Request.RemoteAddr,"持久化书籍评论失败 " ,err , info )
+		this.Abort(Abort500)
+		return
+	}
+
+	// 评论成功, 返回
+	responseJSON(&this.Controller, models.ResponseMessage{Detail:"succeed",Code:200})
+	return
 
 
 }

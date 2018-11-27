@@ -34,7 +34,7 @@ func initDataBaseMysql(){
 	}
 
 	// 注册数据库的模型
-	orm.RegisterModel(&models.UserInfo{}, &models.UploadBook{},&models.PublishBook{},&models.ReadingList{},&models.BookProfile{})
+	orm.RegisterModel(&models.UserInfo{}, &models.UploadBook{},&models.PublishBook{},&models.ReadingList{},&models.BookProfile{},&models.BookComment{})
 }
 func main() {
 	if beego.BConfig.RunMode == "dev" {

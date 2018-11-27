@@ -46,6 +46,9 @@ func init() {
 
 			// 用户注销的功能
 			beego.NSRouter("/logout",&v1.UserLogoutController{}),
+
+			// 用户评论书籍
+			beego.NSRouter("/book_comment", &v1.UserCommentBookController{}),
 		),
 
 	)

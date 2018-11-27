@@ -3,11 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/astaxie/beego/orm"
+	_ "github.com/go-sql-driver/mysql"
 	"os"
 	"reading/models"
-
-	_ "github.com/go-sql-driver/mysql"
-
 	_ "reading/routers"
 
 	"github.com/astaxie/beego"
@@ -36,7 +34,7 @@ func initDataBaseMysql(){
 	}
 
 	// 注册数据库的模型
-	orm.RegisterModel(&models.UserInfo{}, &models.UploadBook{})
+	orm.RegisterModel(&models.UserInfo{}, &models.UploadBook{},&models.PublishBook{})
 }
 func main() {
 	if beego.BConfig.RunMode == "dev" {

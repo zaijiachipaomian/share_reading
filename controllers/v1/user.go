@@ -23,12 +23,16 @@ type UserLoginController struct {
 }
 
 const (
-	Abort400       = "400"
-	Abort403       = "403"
-	Abort404       = "404"
-	Abort500       = "500"
-	ContentType    = "Content-Type"
-	ApplicatonJson = "application/json"
+	Abort400        = "400"
+	Abort403        = "403"
+	Abort404        = "404"
+	Abort500        = "500"
+	ContentType     = "Content-Type"
+	ApplicationJson = "application/json"
+	MinCost         = 0  // 最低花费
+	MaxCost         = 20 // 最高的花费
+	MinReward       = 1  // 最低的阅读奖励
+	MaxReward       = 12 // 最高的阅读奖励
 )
 
 var (
@@ -184,7 +188,7 @@ type UserRegisterController struct {
 func (this *UserRegisterController) Prepare() {
 	contentType := this.Ctx.Request.Header.Get(ContentType)
 	//过滤Content-Type 不是application/json方式的请求
-	if !strings.HasPrefix(contentType, ApplicatonJson) {
+	if !strings.HasPrefix(contentType, ApplicationJson) {
 		//
 		info_(this.Ctx.Request.RemoteAddr, " content -type 不是符合的方式 ", contentType)
 		this.Abort(Abort400)
@@ -358,7 +362,7 @@ func (this *UserUploadController) Prepare() {
 
 func (this *UserUploadController) Post() {
 	//
-	ok, sub := utils. ValidJWT(this.Ctx)
+	ok, sub := utils.ValidJWT(this.Ctx)
 	if !ok || sub == "" {
 		this.Data[controllers.DataJson] = models.ResponseMessage{
 			Detail: "登录过期,请重新登录",
@@ -432,16 +436,105 @@ func (this *UserUploadController) Post() {
 
 }
 
+// ------------------------------------------------------------
 // 用户发布新的书籍
-type UserCommitBookController struct {
+type UserPublishBookController struct {
 	Base
 }
 
-func(this *UserCommitBookController)Prepare(){
+func (this *UserPublishBookController) Prepare() {
 
 }
 
-func (this *UserCommitBookController)Post(){
+func (this *UserPublishBookController) Post() {
+
+	ok, sub := utils.ValidJWT(this.Ctx)
+
+	// 用户的 token 已经过期了
+	if !ok {
+
+		responseJSON(&this.Controller, models.ResponseMessage{
+			Detail: "登录过期,请重新登录",
+			Code:   401,
+		})
+		this.StopRun()
+		return
+
+	}
+
+	var info models.UserInfo
+	var err error
+	err = ValidUserInfo(sub, &info)
+	// 从缓存中获取用户的的消息失败
+	if err != nil {
+		responseJSON(&this.Controller, models.ResponseMessage{Detail: "登录信息过期,请重新登录", Code: 401})
+		this.StopRun()
+		return
+	}
+	var publishBook models.PublishBook
+	// todo 获取用户的提交的基本数据, Cost  ,Reward ,
+	if err := this.ParseForm(&publishBook); err != nil {
+		info_(this.Ctx.Request.RemoteAddr, "  parseForm ", err )
+		responseJSON(&this.Controller,models.ResponseMessage{Detail:"参数错误",Code:400})
+		this.StopRun()
+		return
+	}
+	fmt.Printf("publish = %+v \n" , publishBook )
+	// 用户提交的书籍 消耗的阅读币和 奖励币有误
+	if publishBook.Cost < MinCost || publishBook.Cost > MaxCost ||
+		publishBook.Reward <MinReward || publishBook.Reward>MaxReward {
+			responseJSON(&this.Controller, models.ResponseMessage{Detail:"forbidden ", Code:403})
+			this.StopRun()
+			return
+
+	}
+
+	f, h, err := this.GetFile("filename")
+	if err != nil {
+		info_("getfile err ", err)
+		this.Abort(Abort403)
+		return
+	}
+	defer f.Close()
+
+	if !strings.HasSuffix(h.Filename, "pdf") {
+		info_(this.Ctx.Request.RemoteAddr, "不允许上传非 pdf 文件 ", )
+		this.Data[controllers.DataJson] = models.ResponseMessage{
+			Detail: "不允许上传非pdf文件",
+			Code:   422,
+		}
+		this.ServeJSON(true)
+		return
+	}
+
+	publishBook.UserInfo = & info
+	publishBook.SaveName =  fmt.Sprintf("%s%d.pdf", strconv.FormatInt(time.Now().Unix(), 10), info.ID)
+	publishBook.PublishTime = time.Now()
+	// 保存发布书籍的信息
+	_, err = publishBook.Insert()
+	if err != nil {
+		this.Abort(Abort500)
+		return
+	}
+
+
+	err = this.SaveToFile("filename", "static/publish/"+publishBook.SaveName) // 保存位置在 static/upload, 没有文件夹要先创建
+	// 返回处理
+	if err != nil {
+		this.Data[controllers.DataJson] = models.ResponseMessage{
+			Detail: "上传错误",
+			Code:   422,
+		}
+		this.ServeJSON(true)
+		return
+	}
+
+	this.Data[controllers.DataJson] = models.ResponseMessage{
+		Detail: "上传书籍成功",
+		Code:   200,
+	}
+	this.ServeJSON(true)
+	return
 
 }
 
@@ -473,8 +566,28 @@ func generateJWT(uuids uuid.UUID) (jswt string) {
 	return jswt
 }
 
+// 给客户端返回 JSON格式的字符串
+func responseJSON(ctr *beego.Controller, v interface{}) {
+	ctr.Data[controllers.DataJson] = v
+	ctr.ServeJSON(true)
+}
+
+// 从缓存中获取用户的数据
+func ValidUserInfo(uuids string, info *models.UserInfo) (err error) {
+	bytes, err := utils.GetClient().Get(uuids).Bytes()
+
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(bytes, info)
+	if err != nil {
+		return
+	}
+	return
+}
+
 // info 打印日志消息
 func info_(f interface{}, v ... interface{}) {
 	logs.Info(f, v...)
 }
-

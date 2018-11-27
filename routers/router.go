@@ -33,6 +33,9 @@ func init() {
 
 			// 用户上传自己的文件
 			beego.NSRouter("/upload/self", &v1.UserUploadController{}, ),
+
+			// 用户发布书籍
+			beego.NSRouter("/publish",&v1.UserPublishBookController{},"post:Post"),
 		),
 
 	)

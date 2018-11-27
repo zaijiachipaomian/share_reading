@@ -357,7 +357,8 @@ func (this *UserUploadController) Prepare() {
 }
 
 func (this *UserUploadController) Post() {
-	ok, sub := validJWT(&this.Controller)
+	//
+	ok, sub := utils. ValidJWT(this.Ctx)
 	if !ok || sub == "" {
 		this.Data[controllers.DataJson] = models.ResponseMessage{
 			Detail: "登录过期,请重新登录",
@@ -464,30 +465,3 @@ func info_(f interface{}, v ... interface{}) {
 	logs.Info(f, v...)
 }
 
-func validJWT(ctr *beego.Controller) (ok bool, sub string) {
-
-	authorization := ctr.Ctx.Request.Header.Get("Authorization")
-
-	if authorization == "" {
-		return ok, ""
-	}
-
-	t, err := jwt.Parse(authorization, func(*jwt.Token) (interface{}, error) {
-		return jwtSigningKey, nil
-	})
-
-	if err != nil {
-		return ok, ""
-	}
-
-	iss, ok := t.Claims.(jwt.MapClaims)
-	if ok {
-		fmt.Printf("s = %+v \n", iss["sub"])
-		sub = iss["sub"].(string)
-	} else {
-		fmt.Printf("error t.cliams = %#v \n", t.Claims)
-	}
-
-	ok = t.Valid
-	return ok, sub
-}

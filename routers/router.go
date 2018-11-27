@@ -9,20 +9,14 @@ package routers
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/context"
 	"github.com/astaxie/beego/logs"
 	"github.com/astaxie/beego/orm"
-	"github.com/dgrijalva/jwt-go"
 	"reading/controllers"
 	"reading/controllers/v1"
 	"reading/models"
 	"reading/utils"
-)
-
-var (
-	jwtSigningKey = []byte("bla bla bla")
 )
 
 func init() {
@@ -54,7 +48,7 @@ func init() {
 		logs.Info(ctx.Request.RemoteAddr, " dl "+saveName)
 
 		// 验证 jwt
-		ok, sub := validJWT(ctx)
+		ok, sub := utils.ValidJWT(ctx)
 
 		if !ok {
 			// 无效 令牌, 请重新登录
@@ -114,32 +108,4 @@ func init() {
 
 	// 处理出错的路由
 	beego.ErrorController(&controllers.ErrorController{})
-}
-
-func validJWT(ctx *context.Context) (ok bool, sub string) {
-
-	authorization := ctx.Request.Header.Get("Authorization")
-
-	if authorization == "" {
-		return ok, ""
-	}
-
-	t, err := jwt.Parse(authorization, func(*jwt.Token) (interface{}, error) {
-		return jwtSigningKey, nil
-	})
-
-	if err != nil {
-		return ok, ""
-	}
-
-	iss, ok := t.Claims.(jwt.MapClaims)
-	if ok {
-		fmt.Printf("s = %+v \n", iss["sub"])
-		sub = iss["sub"].(string)
-	} else {
-		fmt.Printf("error t.cliams = %#v \n", t.Claims)
-	}
-
-	ok = t.Valid
-	return ok, sub
 }
